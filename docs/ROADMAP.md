@@ -4,9 +4,9 @@ Each stage should end with something that runs. Order matters more than dates.
 
 ## 0. Skeleton
 
-- [ ] Tauri 2 app with React + TypeScript, window titled "Glint" with the logo
-- [ ] Cargo workspace: `crates/glint-core` (pure logic) and `src-tauri` (app shell)
-- [ ] CI: fmt, clippy and tests on every push; app build on Windows and macOS
+- [x] Tauri 2 app with React + TypeScript, window titled "Glint" with the logo
+- [x] Cargo workspace: `crates/glint-core` (pure logic) and `src-tauri` (app shell)
+- [x] CI: fmt, clippy and tests on every push; app build on Windows and macOS
 
 ## 1. Window capture
 

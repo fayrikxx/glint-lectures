@@ -1,0 +1,12 @@
+[package]
+name = "glint"
+description = "Saves lecture slides from any window and turns them into notes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
