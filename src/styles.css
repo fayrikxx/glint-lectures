@@ -1,0 +1,76 @@
+/* Bubbly 3D colors from docs/DESIGN.md. The full token set and theme switching come later. */
+:root {
+  --color-bg: #f4f1ff;
+  --color-text: #1a1240;
+  --color-muted: #5b5480;
+
+  --font-wordmark: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #110a2b;
+    --color-text: #f3f0ff;
+    --color-muted: #b6ace3;
+  }
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+  src: url("./fonts/bricolage-grotesque-latin-800.woff2") format("woff2");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+.start-logo {
+  display: block;
+}
+
+.wordmark {
+  margin: 20px 0 0;
+  font-family: var(--font-wordmark);
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.tagline {
+  margin: 12px 0 0;
+  color: var(--color-muted);
+  font-size: 17px;
+}
