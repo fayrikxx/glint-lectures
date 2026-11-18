@@ -60,13 +60,16 @@ tested on synthetic frames.
 
 ## Building
 
-Not wired up yet. Once the skeleton lands you'll need Rust (stable), Node 20+ and the
+You'll need Rust (stable), Node 20+ and the
 [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS, then:
 
 ```sh
 npm install
 npm run tauri dev
 ```
+
+`npm run tauri build` makes a release build. The slide detection tests run with
+`cargo test -p glint-core` and don't need a screen.
 
 ## Design
 
