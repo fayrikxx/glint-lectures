@@ -10,7 +10,7 @@ Each stage should end with something that runs. Order matters more than dates.
 
 ## 1. Window capture
 
-- [ ] List open windows with titles and app icons
+- [x] List open windows with titles and app icons
 - [ ] Pick one and stream frames from it (Windows Graphics Capture on Windows, ScreenCaptureKit on macOS)
 - [ ] Live preview in the UI, a few frames per second is enough
 - [ ] Draw a capture region by hand as a fallback
