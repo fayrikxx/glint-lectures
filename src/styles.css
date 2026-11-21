@@ -113,6 +113,68 @@ body {
   color: var(--color-muted);
 }
 
+.picker-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 28px;
+}
+
+.capture {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 28px;
+}
+
+.capture-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.capture-window {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.capture-title {
+  margin: 0;
+  font-size: inherit;
+}
+
+.capture-preview {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 0;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.capture-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.capture-canvas[hidden] {
+  display: none;
+}
+
+.capture-status {
+  margin: 0;
+  color: var(--color-muted);
+}
+
 .chunky-button {
   flex-shrink: 0;
   padding: 10px 20px;
