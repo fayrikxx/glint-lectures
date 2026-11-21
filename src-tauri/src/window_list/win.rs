@@ -95,6 +95,7 @@ pub fn list() -> Result<Vec<WindowInfo>, String> {
         let app = apps.entry(pid).or_insert_with(|| app_for_process(pid));
         windows.push(WindowInfo {
             id: hwnd.0 as usize as u64,
+            pid,
             title,
             app_name: app.name.clone(),
             icon: window_icon(hwnd, app.exe.as_ref()).map(|png| png_data_url(&png)),
@@ -125,7 +126,7 @@ fn window_title(hwnd: HWND) -> String {
     }
 }
 
-fn is_cloaked(hwnd: HWND) -> bool {
+pub(crate) fn is_cloaked(hwnd: HWND) -> bool {
     let mut cloaked = 0u32;
     // SAFETY: DWMWA_CLOAKED writes a single u32.
     let result = unsafe {

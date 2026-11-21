@@ -75,6 +75,7 @@ fn list_windows() -> Result<Vec<WindowInfo>, String> {
             .clone();
         list.push(WindowInfo {
             id: id as u64,
+            pid: pid as u32,
             title,
             app_name,
             icon,

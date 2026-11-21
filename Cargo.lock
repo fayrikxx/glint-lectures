@@ -1161,6 +1161,7 @@ name = "glint"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "glint-core",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",

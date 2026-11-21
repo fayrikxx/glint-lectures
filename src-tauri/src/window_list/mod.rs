@@ -5,11 +5,16 @@ mod mac;
 #[cfg(target_os = "windows")]
 mod win;
 
+#[cfg(target_os = "windows")]
+pub(crate) use win::is_cloaked;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowInfo {
     /// HWND on Windows, CGWindowID on macOS. Capture uses it to find the window again.
     pub id: u64,
+    /// Owner process. Window ids get reused, so capture checks that this still matches.
+    pub pid: u32,
     pub title: String,
     pub app_name: String,
     /// PNG as a data URL, `None` when the app doesn't expose an icon we can read.
