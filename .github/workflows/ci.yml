@@ -60,4 +60,10 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - run: npm run tauri -- build --no-bundle
+      # A debug build shares compiled dependencies with `cargo test`, so the tests below
+      # only rebuild our own crates. tauri build runs `npm run build` first, which also
+      # gives generate_context! the dist/ it embeds.
+      - run: npm run tauri -- build --debug --no-bundle
+      # Same feature as tauri build turns on, otherwise tauri gets compiled a second time.
+      # Runs the platform tests (window_list) that the Linux job can't.
+      - run: cargo test --workspace --features tauri/custom-protocol
