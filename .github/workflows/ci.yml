@@ -67,3 +67,7 @@ jobs:
       # Same feature as tauri build turns on, otherwise tauri gets compiled a second time.
       # Runs the platform tests (window_list) that the Linux job can't.
       - run: cargo test --workspace --features tauri/custom-protocol
+        env:
+          # tauri build sets this from bundle.macOS.minimumSystemVersion (10.13 by default).
+          # Without it objc2's C helper and everything built on top of it compile again.
+          MACOSX_DEPLOYMENT_TARGET: "10.13"
