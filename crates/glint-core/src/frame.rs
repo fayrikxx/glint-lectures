@@ -1,7 +1,7 @@
 /// A grayscale frame, one byte per pixel, stored row by row.
 ///
-/// Capture code converts whatever the OS gives it into this, so slide detection
-/// never has to know about BGRA buffers or strides.
+/// Slide detection works on these rather than on captured [`BgraFrame`](crate::BgraFrame)s,
+/// so it never has to care about color or the full capture resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
     width: u32,
