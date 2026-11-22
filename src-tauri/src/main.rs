@@ -23,6 +23,7 @@ fn main() {
             capture::start_capture,
             capture::stop_capture,
             capture::capture_status,
+            capture::set_crop,
             capture::preview_frame,
         ])
         .build(tauri::generate_context!());
