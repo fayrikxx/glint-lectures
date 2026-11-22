@@ -8,6 +8,7 @@
   --color-accent: #6c3bff;
   --color-accent-edge: #3a1fa8;
   --color-on-accent: #ffffff;
+  --color-scrim: rgb(26 18 64 / 55%);
 
   --radius-button: 14px;
   --radius-card: 20px;
@@ -149,6 +150,8 @@ body {
 }
 
 .capture-preview {
+  /* Lets .capture-image size itself in container units. */
+  container-type: size;
   display: grid;
   place-items: center;
   flex: 1;
@@ -159,15 +162,45 @@ body {
   overflow: hidden;
 }
 
+/* As big as fits while keeping the frame's aspect ratio. Its box is exactly the image,
+   so the crop box can be placed in percentages. */
+.capture-image {
+  position: relative;
+  width: min(100cqw, 100cqh * var(--frame-ratio));
+  aspect-ratio: var(--frame-ratio);
+  overflow: hidden;
+}
+
+.capture-image[data-cropping] {
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .capture-canvas {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
 }
 
-.capture-canvas[hidden] {
-  display: none;
+.crop-box {
+  position: absolute;
+  border: 2px solid var(--color-accent);
+  /* Dims everything around the box. .capture-image clips the spread. */
+  box-shadow: 0 0 0 100vmax var(--color-scrim);
+  pointer-events: none;
+}
+
+.capture-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.capture-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
 }
 
 .capture-status {
@@ -199,6 +232,19 @@ body {
 .chunky-button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.chunky-button.secondary {
+  /* Smaller padding makes up for the border, so it's as tall as a primary button. */
+  padding: 8px 18px;
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 5px 0 var(--color-border);
+}
+
+.chunky-button.secondary:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--color-border);
 }
 
 .window-list {
