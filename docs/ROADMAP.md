@@ -12,6 +12,7 @@ Each stage should end with something that runs. Order matters more than dates.
 
 - [x] List open windows with titles and app icons
 - [x] Stream frames from the picked window with a live preview, and cope with closed, minimized and resized windows (Windows Graphics Capture)
+- [x] Warn when the captured window is completely covered: browsers stop drawing it then, so the capture freezes
 - [ ] The same on macOS with ScreenCaptureKit
 - [ ] Crop the capture to the lecture area
 - [ ] Capture a screen region when window capture doesn't work for some app
