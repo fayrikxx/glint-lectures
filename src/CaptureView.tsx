@@ -7,8 +7,9 @@ const NO_CAPTURE = 0;
 const CAPTURING = 1;
 const MINIMIZED = 2;
 const HIDDEN = 3;
-const WINDOW_CLOSED = 4;
-const FAILED = 5;
+const COVERED = 4;
+const WINDOW_CLOSED = 5;
+const FAILED = 6;
 
 const PREVIEW_HEADER_LEN = 20;
 
@@ -142,6 +143,8 @@ function statusText(state: number, failure: string | null): string {
       return "The window is minimized. Restore it to keep capturing.";
     case HIDDEN:
       return "The window is hidden. Bring it back to keep capturing.";
+    case COVERED:
+      return "The window is completely covered. Browsers pause windows you can't see, so leave a corner of it in view.";
     case WINDOW_CLOSED:
       return "The window was closed.";
     case FAILED:

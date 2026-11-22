@@ -55,10 +55,8 @@ struct App {
 }
 
 pub fn list() -> Result<Vec<WindowInfo>, String> {
-    let mut handles: Vec<HWND> = Vec::new();
-    // SAFETY: the callback only runs during this call, while `handles` is alive.
-    unsafe { EnumWindows(Some(collect_handle), LPARAM(&raw mut handles as isize)) }
-        .map_err(|err| format!("failed to enumerate windows: {err}"))?;
+    let handles =
+        top_level_windows().map_err(|err| format!("failed to enumerate windows: {err}"))?;
 
     let own_pid = std::process::id();
     let mut apps: HashMap<u32, App> = HashMap::new();
@@ -105,8 +103,17 @@ pub fn list() -> Result<Vec<WindowInfo>, String> {
     Ok(windows)
 }
 
+/// Top-level windows in z-order, front first.
+pub(crate) fn top_level_windows() -> windows::core::Result<Vec<HWND>> {
+    let mut handles: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only runs during this call, while `handles` is alive.
+    unsafe { EnumWindows(Some(collect_handle), LPARAM(&raw mut handles as isize)) }?;
+    Ok(handles)
+}
+
 unsafe extern "system" fn collect_handle(hwnd: HWND, handles: LPARAM) -> BOOL {
-    // SAFETY: `list` passes a pointer to its Vec and keeps it alive during EnumWindows.
+    // SAFETY: `top_level_windows` passes a pointer to its Vec and keeps it alive during
+    // EnumWindows.
     let handles = unsafe { &mut *(handles.0 as *mut Vec<HWND>) };
     handles.push(hwnd);
     true.into()

@@ -6,7 +6,7 @@ mod mac;
 mod win;
 
 #[cfg(target_os = "windows")]
-pub(crate) use win::is_cloaked;
+pub(crate) use win::{is_cloaked, top_level_windows};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

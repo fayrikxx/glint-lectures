@@ -49,6 +49,9 @@ pub enum CaptureState {
     Minimized,
     /// Hidden without being minimized, or moved to another virtual desktop.
     Hidden,
+    /// Other windows cover all of it. Browsers stop drawing a window like that, so its
+    /// frames can stop until a bit of it is visible again.
+    Covered,
     WindowClosed,
     Failed {
         message: String,
@@ -62,8 +65,9 @@ impl CaptureState {
             CaptureState::Capturing => 1,
             CaptureState::Minimized => 2,
             CaptureState::Hidden => 3,
-            CaptureState::WindowClosed => 4,
-            CaptureState::Failed { .. } => 5,
+            CaptureState::Covered => 4,
+            CaptureState::WindowClosed => 5,
+            CaptureState::Failed { .. } => 6,
         }
     }
 }

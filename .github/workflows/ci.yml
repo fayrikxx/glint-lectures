@@ -71,9 +71,10 @@ jobs:
           # tauri build sets this from bundle.macOS.minimumSystemVersion (10.13 by default).
           # Without it objc2's C helper and everything built on top of it compile again.
           MACOSX_DEPLOYMENT_TARGET: "10.13"
-      # Opens a window and captures it for real. It's not clear that hosted runners have a
-      # desktop session capture works in, so a failure here doesn't fail the build.
-      - name: capture a real window
+      # Tests with real windows: one gets captured, another one gets covered. It's not clear
+      # that hosted runners have a desktop session capture works in, so a failure here
+      # doesn't fail the build.
+      - name: test with real windows
         if: runner.os == 'Windows'
         continue-on-error: true
         run: cargo test -p glint --features tauri/custom-protocol -- --ignored

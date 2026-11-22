@@ -36,6 +36,8 @@ use windows::core::{Error, Interface, Ref, Result as WinResult, factory};
 use super::{CaptureFeed, CaptureState, lock, next_frame_id};
 use crate::window_list::is_cloaked;
 
+mod covered;
+
 /// How often the capture thread copies the newest frame to the CPU. Four times a second is
 /// enough for slides and keeps the cost of the copy low.
 const TICK: Duration = Duration::from_millis(250);
@@ -147,9 +149,10 @@ fn run(
             continue;
         }
 
-        let capturing = state == CaptureState::Capturing;
+        // A covered window can still send frames: only some apps stop drawing it.
+        let reading = matches!(state, CaptureState::Capturing | CaptureState::Covered);
         feed.set_state(state);
-        if !capturing {
+        if !reading {
             continue;
         }
         // A failed read usually means the device just went away, which the next tick handles.
@@ -491,6 +494,8 @@ fn window_state(hwnd: HWND) -> CaptureState {
             CaptureState::Minimized
         } else if !IsWindowVisible(hwnd).as_bool() || is_cloaked(hwnd) {
             CaptureState::Hidden
+        } else if covered::is_covered(hwnd) {
+            CaptureState::Covered
         } else {
             CaptureState::Capturing
         }
@@ -508,8 +513,9 @@ mod tests {
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, MSG,
-        PM_REMOVE, PeekMessageW, RegisterClassW, TranslateMessage, WINDOW_EX_STYLE, WM_PAINT,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
+        HWND_TOPMOST, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_HIDE, SWP_NOACTIVATE,
+        SWP_SHOWWINDOW, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WM_PAINT,
         WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
     };
     use windows::core::w;
@@ -643,5 +649,46 @@ mod tests {
         );
         assert_eq!(pixel(&frame, width / 4, height / 2), RED);
         assert_eq!(pixel(&frame, width * 3 / 4, height / 2), BLUE);
+    }
+
+    #[test]
+    #[ignore = "needs a desktop session, run with --ignored"]
+    fn notices_a_covered_window() {
+        let (window_id, stop_window, window_thread) = open_test_window();
+        let (cover_id, stop_cover, cover_thread) = open_test_window();
+        let (window, cover) = (hwnd_from_id(window_id), hwnd_from_id(cover_id));
+        // Both go above everything else on screen, and the cover above the window.
+        let place = |hwnd, left, top, right, bottom| {
+            // SAFETY: plain call on one of our own windows.
+            unsafe {
+                SetWindowPos(
+                    hwnd,
+                    Some(HWND_TOPMOST),
+                    left,
+                    top,
+                    right - left,
+                    bottom - top,
+                    SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                )
+            }
+            .unwrap();
+        };
+        place(window, 100, 100, 580, 420);
+        place(cover, 60, 60, 620, 460);
+        let covered = window_state(window);
+        // Leaves the right 100 pixels of the window in view.
+        place(cover, 60, 60, 480, 460);
+        let partly_covered = window_state(window);
+        // SAFETY: plain call on our own window.
+        let _ = unsafe { ShowWindow(cover, SW_HIDE) };
+        let uncovered = window_state(window);
+
+        for (stop, thread) in [(stop_window, window_thread), (stop_cover, cover_thread)] {
+            stop.send(()).unwrap();
+            thread.join().unwrap();
+        }
+        assert_eq!(covered, CaptureState::Covered);
+        assert_eq!(partly_covered, CaptureState::Capturing);
+        assert_eq!(uncovered, CaptureState::Capturing);
     }
 }
