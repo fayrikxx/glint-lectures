@@ -55,10 +55,8 @@ struct App {
 }
 
 pub fn list() -> Result<Vec<WindowInfo>, String> {
-    let mut handles: Vec<HWND> = Vec::new();
-    // SAFETY: the callback only runs during this call, while `handles` is alive.
-    unsafe { EnumWindows(Some(collect_handle), LPARAM(&raw mut handles as isize)) }
-        .map_err(|err| format!("failed to enumerate windows: {err}"))?;
+    let handles =
+        top_level_windows().map_err(|err| format!("failed to enumerate windows: {err}"))?;
 
     let own_pid = std::process::id();
     let mut apps: HashMap<u32, App> = HashMap::new();
@@ -95,6 +93,7 @@ pub fn list() -> Result<Vec<WindowInfo>, String> {
         let app = apps.entry(pid).or_insert_with(|| app_for_process(pid));
         windows.push(WindowInfo {
             id: hwnd.0 as usize as u64,
+            pid,
             title,
             app_name: app.name.clone(),
             icon: window_icon(hwnd, app.exe.as_ref()).map(|png| png_data_url(&png)),
@@ -104,8 +103,17 @@ pub fn list() -> Result<Vec<WindowInfo>, String> {
     Ok(windows)
 }
 
+/// Top-level windows in z-order, front first.
+pub(crate) fn top_level_windows() -> windows::core::Result<Vec<HWND>> {
+    let mut handles: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only runs during this call, while `handles` is alive.
+    unsafe { EnumWindows(Some(collect_handle), LPARAM(&raw mut handles as isize)) }?;
+    Ok(handles)
+}
+
 unsafe extern "system" fn collect_handle(hwnd: HWND, handles: LPARAM) -> BOOL {
-    // SAFETY: `list` passes a pointer to its Vec and keeps it alive during EnumWindows.
+    // SAFETY: `top_level_windows` passes a pointer to its Vec and keeps it alive during
+    // EnumWindows.
     let handles = unsafe { &mut *(handles.0 as *mut Vec<HWND>) };
     handles.push(hwnd);
     true.into()
@@ -125,7 +133,7 @@ fn window_title(hwnd: HWND) -> String {
     }
 }
 
-fn is_cloaked(hwnd: HWND) -> bool {
+pub(crate) fn is_cloaked(hwnd: HWND) -> bool {
     let mut cloaked = 0u32;
     // SAFETY: DWMWA_CLOAKED writes a single u32.
     let result = unsafe {

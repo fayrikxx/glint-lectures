@@ -1,8 +1,10 @@
 // Keeps Windows from opening a console window next to the app in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod capture;
 mod window_list;
 
+use tauri::{Manager, RunEvent};
 use window_list::WindowInfo;
 
 #[tauri::command]
@@ -15,10 +17,25 @@ async fn list_windows() -> Result<Vec<WindowInfo>, String> {
 
 fn main() {
     let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![list_windows])
-        .run(tauri::generate_context!());
-    if let Err(err) = app {
-        eprintln!("failed to start glint: {err}");
-        std::process::exit(1);
-    }
+        .manage(capture::Captures::default())
+        .invoke_handler(tauri::generate_handler![
+            list_windows,
+            capture::start_capture,
+            capture::stop_capture,
+            capture::capture_status,
+            capture::preview_frame,
+        ])
+        .build(tauri::generate_context!());
+    let app = match app {
+        Ok(app) => app,
+        Err(err) => {
+            eprintln!("failed to start glint: {err}");
+            std::process::exit(1);
+        }
+    };
+    app.run(|app, event| {
+        if let RunEvent::Exit = event {
+            app.state::<capture::Captures>().stop();
+        }
+    });
 }

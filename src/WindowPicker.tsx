@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-type WindowInfo = {
+export type WindowInfo = {
   id: number;
+  pid: number;
   title: string;
   appName: string;
   icon: string | null;
@@ -13,7 +14,13 @@ type ListState =
   | { status: "ready"; windows: WindowInfo[] }
   | { status: "failed"; error: string };
 
-export default function WindowPicker() {
+type Props = {
+  starting: boolean;
+  startError: string | null;
+  onStart: (target: WindowInfo) => void;
+};
+
+export default function WindowPicker({ starting, startError, onStart }: Props) {
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -30,6 +37,9 @@ export default function WindowPicker() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const selected =
+    list.status === "ready" ? list.windows.find((item) => item.id === selectedId) : undefined;
 
   return (
     <section className="picker" aria-labelledby="picker-title">
@@ -69,13 +79,7 @@ export default function WindowPicker() {
                 aria-pressed={item.id === selectedId}
                 onClick={() => setSelectedId(item.id)}
               >
-                {item.icon ? (
-                  <img className="window-icon" src={item.icon} alt="" width={32} height={32} />
-                ) : (
-                  <span className="window-icon window-icon-empty" aria-hidden="true">
-                    {(item.appName || item.title).charAt(0).toUpperCase()}
-                  </span>
-                )}
+                <WindowIcon item={item} />
                 <span className="window-text">
                   <span className="window-title">{item.title}</span>
                   {item.appName && <span className="window-app">{item.appName}</span>}
@@ -85,6 +89,32 @@ export default function WindowPicker() {
           ))}
         </ul>
       )}
+
+      <div className="picker-foot">
+        <button
+          type="button"
+          className="chunky-button"
+          onClick={() => selected && onStart(selected)}
+          disabled={!selected || starting}
+        >
+          {starting ? "Starting..." : "Start capture"}
+        </button>
+        {startError && (
+          <p className="picker-note" role="alert">
+            Couldn't start: {startError}
+          </p>
+        )}
+      </div>
     </section>
+  );
+}
+
+export function WindowIcon({ item }: { item: WindowInfo }) {
+  return item.icon ? (
+    <img className="window-icon" src={item.icon} alt="" width={32} height={32} />
+  ) : (
+    <span className="window-icon window-icon-empty" aria-hidden="true">
+      {(item.appName || item.title).charAt(0).toUpperCase()}
+    </span>
   );
 }
