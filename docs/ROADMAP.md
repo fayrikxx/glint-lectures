@@ -11,14 +11,15 @@ Each stage should end with something that runs. Order matters more than dates.
 ## 1. Window capture
 
 - [x] List open windows with titles and app icons
-- [ ] Pick one and stream frames from it (Windows Graphics Capture on Windows, ScreenCaptureKit on macOS)
-- [ ] Live preview in the UI, a few frames per second is enough
-- [ ] Draw a capture region by hand as a fallback
+- [x] Stream frames from the picked window with a live preview, and cope with closed, minimized and resized windows (Windows Graphics Capture)
+- [ ] The same on macOS with ScreenCaptureKit
+- [ ] Crop the capture to the lecture area
+- [ ] Capture a screen region when window capture doesn't work for some app
 
 ## 2. Slide detection
 
 - [ ] Downscale + grayscale frames, compare with the last stable frame
-- [ ] Count a change only above an area threshold and after it stays still (~1.5 s)
+- [ ] Count a change only above an area threshold and after it stays still (~1.5 s). Measure stillness in time: a window that doesn't change sends no frames at all
 - [ ] Motion map: mask regions that keep changing (webcam tiles, presenter bubble)
 - [ ] Detect bullet builds and replace the previous slide instead of adding a new one
 - [ ] Tests on synthetic frame sequences for all of the above
@@ -28,6 +29,7 @@ Each stage should end with something that runs. Order matters more than dates.
 - [ ] Save each lecture as a folder: slide PNGs + `lecture.json`
 - [ ] Library screen with all lectures
 - [ ] Review screen: slide list, big preview, delete / crop / merge with previous
+- [ ] Switch to another window without ending the lecture (slideshows and pop-out windows open new ones)
 - [ ] Blur faces in saved slides
 
 ## 4. OCR
@@ -51,7 +53,7 @@ Each stage should end with something that runs. Order matters more than dates.
 
 ## 7. Audio (optional)
 
-- [ ] System audio capture (WASAPI loopback / ScreenCaptureKit)
+- [ ] Capture the lecture's audio (WASAPI loopback on Windows, the same ScreenCaptureKit stream as the video on macOS)
 - [ ] Local transcription with whisper.cpp bindings, split by slide timestamps
 
 ## 8. Interface
@@ -63,4 +65,5 @@ Each stage should end with something that runs. Order matters more than dates.
 ## 9. Release
 
 - [ ] Installers for Windows (MSI/NSIS) and macOS (DMG)
+- [ ] Sign macOS builds with a Developer ID, otherwise the Screen Recording permission resets on every update
 - [ ] Screenshots and a short GIF in the README
