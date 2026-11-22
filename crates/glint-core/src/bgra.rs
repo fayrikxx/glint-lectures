@@ -1,3 +1,5 @@
+use crate::CropArea;
+
 /// A captured frame in the layout capture APIs hand out: BGRA, four bytes per pixel,
 /// rows packed with no padding.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +46,25 @@ impl BgraFrame {
     /// Gives the buffer back so the next frame can reuse it instead of allocating.
     pub fn into_pixels(self) -> Vec<u8> {
         self.pixels
+    }
+
+    /// Copies the part of the frame inside `area`.
+    pub fn crop(&self, area: CropArea) -> BgraFrame {
+        let (columns, rows) = area.pixels(self.width, self.height);
+        let (width, height) = (columns.len(), rows.len());
+        let row_len = self.width as usize * 4;
+
+        let mut pixels = Vec::with_capacity(width * height * 4);
+        for y in rows {
+            let row = &self.pixels[y * row_len..(y + 1) * row_len];
+            pixels.extend_from_slice(&row[columns.start * 4..columns.end * 4]);
+        }
+
+        BgraFrame {
+            width: width as u32,
+            height: height as u32,
+            pixels,
+        }
     }
 
     /// Shrinks the frame to fit in `max_width` x `max_height` by averaging square blocks
@@ -177,6 +198,45 @@ mod tests {
         let frame = BgraFrame::new(1920, 1080, vec![0; 1920 * 1080 * 4]).unwrap();
         let image = frame.shrink_to_rgba(960, 960);
         assert_eq!((image.width, image.height), (960, 540));
+    }
+
+    #[test]
+    fn crop_copies_the_area() {
+        // Every pixel holds its own x and y, so the result shows where it came from.
+        let pixels: Vec<[u8; 4]> = (0..4)
+            .flat_map(|y| (0..4).map(move |x| [x, y, 0, 255]))
+            .collect();
+        let frame = bgra(4, 4, &pixels);
+        let cropped = frame.crop(CropArea::new(0.25, 0.5, 0.75, 1.0).unwrap());
+        assert_eq!((cropped.width(), cropped.height()), (2, 2));
+        assert_eq!(
+            cropped.pixels(),
+            [
+                [1, 2, 0, 255],
+                [2, 2, 0, 255],
+                [1, 3, 0, 255],
+                [2, 3, 0, 255]
+            ]
+            .concat()
+        );
+    }
+
+    #[test]
+    fn crop_to_the_whole_frame_keeps_it() {
+        let frame = bgra(
+            2,
+            2,
+            &[
+                [1, 2, 3, 4],
+                [5, 6, 7, 8],
+                [9, 10, 11, 12],
+                [13, 14, 15, 16],
+            ],
+        );
+        assert_eq!(
+            frame.crop(CropArea::new(0.0, 0.0, 1.0, 1.0).unwrap()),
+            frame
+        );
     }
 
     #[test]

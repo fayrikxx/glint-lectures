@@ -2,15 +2,15 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import logo from "../assets/logo.svg";
 import logoDark from "../assets/logo-dark.svg";
-import CaptureView from "./CaptureView";
+import CaptureView, { type CropArea } from "./CaptureView";
 import WindowPicker, { type WindowInfo } from "./WindowPicker";
 
 type Screen =
   | { kind: "loading" }
   | { kind: "picking"; starting: boolean; error: string | null }
-  | { kind: "capturing"; sessionId: number; target: WindowInfo | null };
+  | { kind: "capturing"; sessionId: number; target: WindowInfo | null; crop: CropArea | null };
 
-type CaptureStatus = { sessionId: number; windowId: number };
+type CaptureStatus = { sessionId: number; windowId: number; crop: CropArea | null };
 
 const PICKING: Screen = { kind: "picking", starting: false, error: null };
 
@@ -31,6 +31,7 @@ export default function App() {
         kind: "capturing",
         sessionId: status.sessionId,
         target: windows.find((item) => item.id === status.windowId) ?? null,
+        crop: status.crop,
       });
     }
     resume().catch(() => setScreen(PICKING));
@@ -43,7 +44,7 @@ export default function App() {
         windowId: target.id,
         pid: target.pid,
       });
-      setScreen({ kind: "capturing", sessionId, target });
+      setScreen({ kind: "capturing", sessionId, target, crop: null });
     } catch (error) {
       setScreen({ kind: "picking", starting: false, error: String(error) });
     }
@@ -75,6 +76,7 @@ export default function App() {
           key={screen.sessionId}
           sessionId={screen.sessionId}
           target={screen.target}
+          initialCrop={screen.crop}
           onStop={() => void stopCapture(screen.sessionId)}
         />
       )}

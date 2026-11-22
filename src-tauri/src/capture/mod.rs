@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::Duration;
 
-use glint_core::{FrameSlot, RgbaImage, SlotWait};
-use serde::Serialize;
+use glint_core::{CropArea, FrameSlot, RgbaImage, SlotWait};
+use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager, State};
 
@@ -102,6 +102,8 @@ pub fn next_frame_id() -> u64 {
 struct CaptureSession {
     id: u64,
     window_id: u64,
+    /// The part of the window slides are read from. `None` means the whole window.
+    crop: Option<CropArea>,
     feed: Arc<CaptureFeed>,
     // Dropped last: stops the OS capture and waits for its thread.
     _capture: platform::Capture,
@@ -114,6 +116,7 @@ impl CaptureSession {
         Ok(Self {
             id: NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed),
             window_id,
+            crop: None,
             feed,
             _capture: capture,
         })
@@ -144,10 +147,10 @@ impl Captures {
         }
     }
 
-    fn feed(&self) -> Option<Arc<CaptureFeed>> {
+    fn feed_and_crop(&self) -> Option<(Arc<CaptureFeed>, Option<CropArea>)> {
         lock(&self.0)
             .as_ref()
-            .map(|session| Arc::clone(&session.feed))
+            .map(|session| (Arc::clone(&session.feed), session.crop))
     }
 
     /// Stops the running capture. Tauri doesn't drop managed state when the app exits,
@@ -163,6 +166,36 @@ pub struct CaptureStatus {
     session_id: u64,
     window_id: u64,
     state: CaptureState,
+    crop: Option<CropBox>,
+}
+
+/// A crop area the way the UI sends and gets it: edges as fractions of the window's size.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct CropBox {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+impl From<CropArea> for CropBox {
+    fn from(area: CropArea) -> Self {
+        Self {
+            left: area.left(),
+            top: area.top(),
+            right: area.right(),
+            bottom: area.bottom(),
+        }
+    }
+}
+
+impl TryFrom<CropBox> for CropArea {
+    type Error = String;
+
+    fn try_from(crop: CropBox) -> Result<Self, String> {
+        CropArea::new(crop.left, crop.top, crop.right, crop.bottom)
+            .ok_or_else(|| "the crop area has to be inside the window".to_string())
+    }
 }
 
 /// Starts capturing a window from `list_windows` and returns the session id.
@@ -201,20 +234,41 @@ pub fn capture_status(captures: State<Captures>) -> Option<CaptureStatus> {
         session_id: session.id,
         window_id: session.window_id,
         state: session.feed.state(),
+        crop: session.crop.map(CropBox::from),
     })
 }
 
-/// Waits for a frame newer than `after` and returns it shrunk for the preview.
+/// Sets the part of the window that slides are read from. `None` means the whole window.
+#[tauri::command]
+pub fn set_crop(
+    session_id: u64,
+    area: Option<CropBox>,
+    captures: State<Captures>,
+) -> Result<(), String> {
+    let area = area.map(CropArea::try_from).transpose()?;
+    match lock(&captures.0).as_mut() {
+        Some(session) if session.id == session_id => {
+            session.crop = area;
+            Ok(())
+        }
+        _ => Err("the capture has already stopped".to_string()),
+    }
+}
+
+/// Waits for a frame newer than `after` and returns it shrunk for the preview. With
+/// `cropped` set, the frame is cut to the crop area first, the same way slides will be.
 /// See [`preview_reply`] for the layout.
 #[tauri::command]
 pub async fn preview_frame(
     after: u64,
+    cropped: bool,
     app: AppHandle,
     captures: State<'_, Captures>,
 ) -> Result<Response, String> {
-    let Some(feed) = captures.feed() else {
+    let Some((feed, crop)) = captures.feed_and_crop() else {
         return Ok(Response::new(preview_reply(0, None)));
     };
+    let crop = crop.filter(|_| cropped);
     let window = app.get_webview_window("main");
     let reply = blocking(move || {
         // Nobody can see the preview while Glint is minimized. Capture keeps going.
@@ -224,7 +278,13 @@ pub async fn preview_frame(
         }
         let frame = match feed.frames.wait_newer(after, PREVIEW_WAIT) {
             SlotWait::Frame { id, frame } => {
-                Some((id, frame.shrink_to_rgba(PREVIEW_MAX_SIZE, PREVIEW_MAX_SIZE)))
+                let image = match crop {
+                    Some(area) => frame
+                        .crop(area)
+                        .shrink_to_rgba(PREVIEW_MAX_SIZE, PREVIEW_MAX_SIZE),
+                    None => frame.shrink_to_rgba(PREVIEW_MAX_SIZE, PREVIEW_MAX_SIZE),
+                };
+                Some((id, image))
             }
             SlotWait::TimedOut | SlotWait::Closed => None,
         };
@@ -279,6 +339,22 @@ mod tests {
         assert_eq!(reply.len(), PREVIEW_HEADER_LEN);
         assert_eq!(&reply[0..8], &0u64.to_le_bytes());
         assert_eq!(&reply[16..20], &2u32.to_le_bytes());
+    }
+
+    #[test]
+    fn crop_box_has_to_fit_the_window() {
+        let inside = CropBox {
+            left: 0.1,
+            top: 0.2,
+            right: 0.9,
+            bottom: 1.0,
+        };
+        assert!(CropArea::try_from(inside).is_ok());
+        let outside = CropBox {
+            right: 1.5,
+            ..inside
+        };
+        assert!(CropArea::try_from(outside).is_err());
     }
 
     #[test]

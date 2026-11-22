@@ -30,6 +30,7 @@ Three slides stacked close together with soft shadows, and a glowing star on the
 | Sky | `#7CC4FF` | highlights, text on it `#0D1A40` |
 | Lilac | `#C7B3FF` | marker highlight under key phrases |
 | Ink | `#1A1240` | text on light |
+| Scrim | `#1A1240` at 55% | dims the window around the crop box |
 | Night | `#110A2B` | dark background |
 | Sticker | `#FFD84D` | stars and badges only |
 
@@ -45,6 +46,7 @@ so everything is driven by design tokens (CSS variables).
 - Background `#F4F1FF` / dark `#110A2B`, surfaces `#FFFFFF` / `#1C1442`
 - Text `#1A1240` / `#F3F0FF`, muted `#5B5480` / `#B6ACE3`, borders `#DDD3FF` / `#3A2E78`
 - Chunky buttons with a solid bottom edge: `box-shadow: 0 5px 0 <edge>`
+- Secondary buttons: surface color, 2 px border, and the border color as the bottom edge
 - Radius 14–28 px
 - Fonts: Bricolage Grotesque (headings), DM Sans (text)
 
