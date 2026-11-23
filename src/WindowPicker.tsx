@@ -23,9 +23,14 @@ type Props = {
 export default function WindowPicker({ starting, startError, onStart }: Props) {
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Only macOS can say no here. Until it says yes, other apps' windows can't be captured.
+  const [canRecord, setCanRecord] = useState(true);
 
   const refresh = useCallback(async () => {
     setList({ status: "loading" });
+    invoke<boolean>("screen_access")
+      .then(setCanRecord)
+      .catch(() => {});
     try {
       const windows = await invoke<WindowInfo[]>("list_windows");
       setList({ status: "ready", windows });
@@ -56,6 +61,22 @@ export default function WindowPicker({ starting, startError, onStart }: Props) {
           Refresh
         </button>
       </div>
+
+      {!canRecord && (
+        <div className="picker-access">
+          <p className="picker-note">
+            macOS hasn't let Glint record the screen yet. Turn Glint on under Screen Recording,
+            then reopen Glint.
+          </p>
+          <button
+            type="button"
+            className="chunky-button secondary"
+            onClick={() => void invoke("open_screen_settings").catch(() => {})}
+          >
+            Open Settings
+          </button>
+        </div>
+      )}
 
       {list.status === "loading" && <p className="picker-note">Looking for windows...</p>}
 
