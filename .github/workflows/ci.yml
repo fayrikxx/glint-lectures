@@ -48,6 +48,11 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # tauri build sets this from bundle.macOS.minimumSystemVersion. The test steps need
+      # the same value, or objc2's C helper and everything built on top of it compile again.
+      # Windows ignores it.
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v7
 
@@ -67,14 +72,11 @@ jobs:
       # Same feature as tauri build turns on, otherwise tauri gets compiled a second time.
       # Runs the platform tests (window_list) that the Linux job can't.
       - run: cargo test --workspace --features tauri/custom-protocol
-        env:
-          # tauri build sets this from bundle.macOS.minimumSystemVersion (10.13 by default).
-          # Without it objc2's C helper and everything built on top of it compile again.
-          MACOSX_DEPLOYMENT_TARGET: "10.13"
-      # Tests with real windows: one gets captured, another one gets covered. It's not clear
-      # that hosted runners have a desktop session capture works in, so a failure here
-      # doesn't fail the build.
+      # The Linux job never sees the Windows and macOS code, so it gets linted here.
+      - run: cargo clippy --workspace --all-targets --features tauri/custom-protocol -- -D warnings
+      # Tests with real windows. On Windows one gets captured and another one gets covered,
+      # on macOS Calculator gets captured. It's not clear that hosted runners have a desktop
+      # session capture works in, so a failure here doesn't fail the build.
       - name: test with real windows
-        if: runner.os == 'Windows'
         continue-on-error: true
         run: cargo test -p glint --features tauri/custom-protocol -- --ignored

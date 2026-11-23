@@ -114,6 +114,17 @@ body {
   color: var(--color-muted);
 }
 
+.picker-access {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.picker-access .chunky-button {
+  flex-shrink: 0;
+}
+
 .picker-foot {
   display: flex;
   align-items: center;

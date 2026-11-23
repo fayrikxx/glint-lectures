@@ -17,7 +17,7 @@ use super::{WindowInfo, png_data_url};
 
 const ICON_SIZE: isize = 64;
 
-type WindowDict = CFDictionary<CFString, CFType>;
+pub(crate) type WindowDict = CFDictionary<CFString, CFType>;
 
 pub fn list() -> Result<Vec<WindowInfo>, String> {
     // Called from a worker thread that has no autorelease pool of its own.
@@ -85,11 +85,11 @@ fn list_windows() -> Result<Vec<WindowInfo>, String> {
     Ok(list)
 }
 
-fn number(window: &WindowDict, key: &CFString) -> Option<i64> {
+pub(crate) fn number(window: &WindowDict, key: &CFString) -> Option<i64> {
     window.get(key)?.downcast_ref::<CFNumber>()?.as_i64()
 }
 
-fn float(window: &WindowDict, key: &CFString) -> Option<f64> {
+pub(crate) fn float(window: &WindowDict, key: &CFString) -> Option<f64> {
     window.get(key)?.downcast_ref::<CFNumber>()?.as_f64()
 }
 

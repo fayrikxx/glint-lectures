@@ -25,6 +25,8 @@ fn main() {
             capture::capture_status,
             capture::set_crop,
             capture::preview_frame,
+            capture::screen_access,
+            capture::open_screen_settings,
         ])
         .build(tauri::generate_context!());
     let app = match app {
