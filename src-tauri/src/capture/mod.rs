@@ -1,6 +1,6 @@
-// macOS gets its backend in a later change, and Linux is only built for the CI checks.
-// Without a backend, the parts that only a backend uses look unused there.
-#![cfg_attr(not(target_os = "windows"), allow(dead_code))]
+// Linux is only built for the CI checks. Without a backend, the parts that only a backend
+// uses look unused there.
+#![cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -12,12 +12,16 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager, State};
 
+#[cfg(target_os = "macos")]
+mod mac;
+#[cfg(target_os = "macos")]
+use mac as platform;
 #[cfg(target_os = "windows")]
 mod win;
 #[cfg(target_os = "windows")]
 use win as platform;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod platform {
     use std::sync::Arc;
 
@@ -45,7 +49,9 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CaptureState {
     Capturing,
-    /// Minimized windows don't produce frames, so the preview keeps the last one.
+    /// Minimized windows don't produce frames, so the preview keeps the last one. macOS
+    /// can't tell them from hidden ones and reports them as hidden.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     Minimized,
     /// Hidden without being minimized, or moved to another virtual desktop.
     Hidden,
@@ -253,6 +259,24 @@ pub fn set_crop(
         }
         _ => Err("the capture has already stopped".to_string()),
     }
+}
+
+/// Whether the system lets Glint record other windows. Only macOS asks the user for this.
+#[tauri::command]
+pub fn screen_access() -> bool {
+    #[cfg(target_os = "macos")]
+    return mac::has_screen_access();
+    #[cfg(not(target_os = "macos"))]
+    true
+}
+
+/// Opens the system settings page where screen recording is allowed.
+#[tauri::command]
+pub fn open_screen_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return mac::open_screen_settings();
+    #[cfg(not(target_os = "macos"))]
+    Err("only macOS asks for this permission".to_string())
 }
 
 /// Waits for a frame newer than `after` and returns it shrunk for the preview. With

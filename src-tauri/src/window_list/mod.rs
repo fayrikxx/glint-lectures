@@ -5,6 +5,8 @@ mod mac;
 #[cfg(target_os = "windows")]
 mod win;
 
+#[cfg(target_os = "macos")]
+pub(crate) use mac::{WindowDict, float, number};
 #[cfg(target_os = "windows")]
 pub(crate) use win::{is_cloaked, top_level_windows};
 
