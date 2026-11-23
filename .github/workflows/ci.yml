@@ -72,10 +72,11 @@ jobs:
       # Same feature as tauri build turns on, otherwise tauri gets compiled a second time.
       # Runs the platform tests (window_list) that the Linux job can't.
       - run: cargo test --workspace --features tauri/custom-protocol
-      # Tests with real windows: one gets captured, another one gets covered. It's not clear
-      # that hosted runners have a desktop session capture works in, so a failure here
-      # doesn't fail the build.
+      # The Linux job never sees the Windows and macOS code, so it gets linted here.
+      - run: cargo clippy --workspace --all-targets --features tauri/custom-protocol -- -D warnings
+      # Tests with real windows. On Windows one gets captured and another one gets covered,
+      # on macOS Calculator gets captured. It's not clear that hosted runners have a desktop
+      # session capture works in, so a failure here doesn't fail the build.
       - name: test with real windows
-        if: runner.os == 'Windows'
         continue-on-error: true
         run: cargo test -p glint --features tauri/custom-protocol -- --ignored
