@@ -1,24 +1,25 @@
 use crate::RgbaImage;
 
 /// Changes are counted in square blocks of this many analysis-image pixels on a side.
-const BLOCK_SIZE: usize = 16;
+pub(crate) const BLOCK_SIZE: usize = 16;
 /// A pixel counts as changed when one of its channels moved by more than this many levels
 /// out of 255. Video compression makes still content shimmer by a few levels.
 const PIXEL_NOISE: u8 = 12;
 /// A block counts as changed when at least this many of its pixels did.
 const CHANGED_PIXELS: u32 = 8;
 
-/// How many blocks differ between two analysis images of the same size.
-pub(crate) fn changed_blocks(before: &RgbaImage, after: &RgbaImage) -> usize {
+/// Which blocks differ between two analysis images of the same size, row by row, with
+/// [`block_columns`] blocks to a row.
+pub(crate) fn changed_blocks(before: &RgbaImage, after: &RgbaImage) -> Vec<bool> {
     debug_assert_eq!((before.width, before.height), (after.width, after.height));
     let row_len = after.width as usize * 4;
     if row_len == 0 || before.pixels.len() != after.pixels.len() {
-        return 0;
+        return Vec::new();
     }
 
     let band_len = row_len * BLOCK_SIZE;
-    let mut counts = vec![0u32; (after.width as usize).div_ceil(BLOCK_SIZE)];
-    let mut changed = 0;
+    let mut counts = vec![0u32; block_columns(after.width)];
+    let mut changed = Vec::new();
     for (band_before, band_after) in before
         .pixels
         .chunks(band_len)
@@ -33,12 +34,13 @@ pub(crate) fn changed_blocks(before: &RgbaImage, after: &RgbaImage) -> usize {
                 *count += changed_pixels(block_before, block_after);
             }
         }
-        changed += counts
-            .iter()
-            .filter(|&&count| count >= CHANGED_PIXELS)
-            .count();
+        changed.extend(counts.iter().map(|&count| count >= CHANGED_PIXELS));
     }
     changed
+}
+
+pub(crate) fn block_columns(width: u32) -> usize {
+    (width as usize).div_ceil(BLOCK_SIZE)
 }
 
 fn changed_pixels(before: &[u8], after: &[u8]) -> u32 {
@@ -54,7 +56,7 @@ fn changed_pixels(before: &[u8], after: &[u8]) -> u32 {
 /// The biggest difference between the color channels of two pixels. Mixing the channels
 /// into one brightness value first would make some colors look alike: in (R + 2G + B) / 4
 /// pure red and pure blue are both 64.
-fn channel_change(a: &[u8; 4], b: &[u8; 4]) -> u8 {
+pub(crate) fn channel_change(a: &[u8; 4], b: &[u8; 4]) -> u8 {
     a[0].abs_diff(b[0])
         .max(a[1].abs_diff(b[1]))
         .max(a[2].abs_diff(b[2]))
@@ -85,6 +87,10 @@ mod tests {
         image
     }
 
+    fn count(blocks: Vec<bool>) -> usize {
+        blocks.into_iter().filter(|&changed| changed).count()
+    }
+
     fn biggest_change(before: &RgbaImage, after: &RgbaImage) -> u8 {
         let before = before.pixels.as_chunks::<4>().0;
         let after = after.pixels.as_chunks::<4>().0;
@@ -99,7 +105,7 @@ mod tests {
     #[test]
     fn same_images_have_no_changed_blocks() {
         let gray = image(40, 40, [90, 90, 90, 255]);
-        assert_eq!(changed_blocks(&gray, &gray.clone()), 0);
+        assert_eq!(count(changed_blocks(&gray, &gray.clone())), 0);
     }
 
     #[test]
@@ -109,16 +115,16 @@ mod tests {
         for x in 0..7 {
             set(&mut after, x, 0, [100, 113, 100, 255]);
         }
-        assert_eq!(changed_blocks(&before, &after), 0);
+        assert_eq!(count(changed_blocks(&before, &after)), 0);
         set(&mut after, 7, 0, [100, 113, 100, 255]);
-        assert_eq!(changed_blocks(&before, &after), 1);
+        assert_eq!(changed_blocks(&before, &after), [true, false]);
     }
 
     #[test]
     fn noise_up_to_the_threshold_is_ignored() {
         let before = image(16, 16, [100, 100, 100, 255]);
         let after = image(16, 16, [112, 88, 112, 255]);
-        assert_eq!(changed_blocks(&before, &after), 0);
+        assert_eq!(changed_blocks(&before, &after), [false]);
     }
 
     #[test]
@@ -131,7 +137,7 @@ mod tests {
                 set(&mut after, x, y, [255, 255, 255, 255]);
             }
         }
-        assert_eq!(changed_blocks(&before, &after), 1);
+        assert_eq!(changed_blocks(&before, &after), [false, false, false, true]);
     }
 
     #[test]
@@ -145,13 +151,13 @@ mod tests {
 
             let (before, after) = (shrunk(&plain), shrunk(&text));
             assert!(biggest_change(&before, &after) >= 200);
-            assert!(changed_blocks(&before, &after) > 0);
+            assert!(count(changed_blocks(&before, &after)) > 0);
         }
     }
 
     #[test]
     fn empty_images_have_no_blocks() {
         let empty = RgbaImage::default();
-        assert_eq!(changed_blocks(&empty, &empty), 0);
+        assert!(changed_blocks(&empty, &empty).is_empty());
     }
 }

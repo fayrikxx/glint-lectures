@@ -4,3 +4,7 @@ description = "Slide detection and lecture data for Glint, without any OS or UI 
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[dev-dependencies]
+# Reads recorded frames and writes debug pictures in examples/replay.rs.
+png = "0.18"

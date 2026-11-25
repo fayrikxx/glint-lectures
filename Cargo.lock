@@ -1182,6 +1182,9 @@ dependencies = [
 [[package]]
 name = "glint-core"
 version = "0.1.0"
+dependencies = [
+ "png",
+]
 
 [[package]]
 name = "glob"

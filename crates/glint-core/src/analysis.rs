@@ -87,10 +87,7 @@ impl Analysis {
             return;
         }
 
-        let (columns, rows) = area.pixels(frame.width(), frame.height());
-        let factor = shrink_factor(columns.len(), rows.len());
-        frame.shrink_into(area, factor, &mut self.scratch);
-
+        analysis_image(frame, area, &mut self.scratch);
         let geometry = Some(Geometry {
             width: frame.width(),
             height: frame.height(),
@@ -98,7 +95,9 @@ impl Analysis {
         });
         // A resized window or a new crop gives a picture to compare against from now on,
         // not a change: the old one isn't comparable pixel by pixel.
-        if geometry == self.geometry && changed_blocks(&self.previous, &self.scratch) > 0 {
+        if geometry == self.geometry
+            && changed_blocks(&self.previous, &self.scratch).contains(&true)
+        {
             self.changed(now);
         }
         self.geometry = geometry;
@@ -140,6 +139,12 @@ impl Analysis {
         }
         self.last_change = now;
     }
+}
+
+/// Shrinks `area` of `frame` into `out`: the picture the analysis compares.
+pub(crate) fn analysis_image(frame: &BgraFrame, area: CropArea, out: &mut RgbaImage) {
+    let (columns, rows) = area.pixels(frame.width(), frame.height());
+    frame.shrink_into(area, shrink_factor(columns.len(), rows.len()), out);
 }
 
 /// The shrink factor for an area of `width` x `height` pixels. It is at least 2, so
