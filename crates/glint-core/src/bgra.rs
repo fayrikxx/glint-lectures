@@ -113,29 +113,32 @@ impl BgraFrame {
         out.height = out_height as u32;
         out.pixels.clear();
         out.pixels.reserve(out_width * out_height * 4);
-        let mut sums = vec![[0u32; 3]; out_width];
 
+        // Each row of a band of blocks is first added byte by byte into column sums. That
+        // loop is a plain add over a slice, which the compiler turns into vector code, and
+        // it's where nearly all the time goes. Blocks are summed from the columns after.
+        let mut column_sums = vec![0u32; width * 4];
         for block_top in rows.clone().step_by(factor) {
             let block_bottom = (block_top + factor).min(rows.end);
-            sums.fill([0; 3]);
-
+            column_sums.fill(0);
             for y in block_top..block_bottom {
-                let row =
-                    &self.pixels[y * row_len + columns.start * 4..y * row_len + columns.end * 4];
-                for (sum, block) in sums.iter_mut().zip(row.as_chunks::<4>().0.chunks(factor)) {
-                    for px in block {
-                        sum[0] += u32::from(px[0]);
-                        sum[1] += u32::from(px[1]);
-                        sum[2] += u32::from(px[2]);
-                    }
+                let start = y * row_len + columns.start * 4;
+                let row = &self.pixels[start..start + width * 4];
+                for (sum, &value) in column_sums.iter_mut().zip(row) {
+                    *sum += u32::from(value);
                 }
             }
 
             let block_rows = block_bottom - block_top;
-            for (column, sum) in sums.iter().enumerate() {
-                // The last column and row of blocks can be narrower than `factor`.
-                let block_columns = factor.min(width - column * factor);
-                let count = (block_rows * block_columns) as u32;
+            // The last column and row of blocks can be narrower than `factor`.
+            for block in column_sums.chunks(factor * 4) {
+                let count = (block_rows * block.len() / 4) as u32;
+                let mut sum = [0u32; 3];
+                for px in block.as_chunks::<4>().0 {
+                    sum[0] += px[0];
+                    sum[1] += px[1];
+                    sum[2] += px[2];
+                }
                 let average = |total: u32| ((total + count / 2) / count) as u8;
                 out.pixels.extend_from_slice(&[
                     average(sum[2]),
