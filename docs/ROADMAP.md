@@ -15,15 +15,19 @@ Each stage should end with something that runs. Order matters more than dates.
 - [x] Warn when the captured window is completely covered: browsers stop drawing it then, so the capture freezes
 - [x] The same on macOS with ScreenCaptureKit
 - [x] Crop the capture to the lecture area
-- [ ] Capture a screen region when window capture doesn't work for some app
 
 ## 2. Slide detection
 
-- [ ] Downscale + grayscale frames, compare with the last stable frame
-- [ ] Count a change only above an area threshold and after it stays still (~1.5 s). Measure stillness in time: a window that doesn't change sends no frames at all
-- [ ] Motion map: mask regions that keep changing (webcam tiles, presenter bubble)
-- [ ] Detect bullet builds and replace the previous slide instead of adding a new one
+- [ ] Analyze frames on a background thread that stays out of the way of other programs: a downscaled copy of the slide area, with stillness measured in time (a window that doesn't change sends no frames at all)
+- [ ] Replay recorded captures through the detector to measure it on real lectures: missed slides, extra slides, delay
+- [ ] Count a new slide when the slide area changes enough and then stays still (~1.5 s), and keep its sharpest frame
+- [ ] Show the slides found so far as a strip of thumbnails under the preview
+- [ ] Don't count what isn't a new slide: cursor, laser pointer, captions, reactions, player controls, webcam tiles, the presenter bubble, video playing in the window
+- [ ] Bullet builds and live ink update the current slide, and going back to an earlier slide links to it instead of adding a copy
+- [ ] Find the slide area by itself and follow it through layout changes (resize, fullscreen, side panels) without counting them as new slides
+- [ ] A manual crop stays on top of the found area; notice when the slides leave the window (pop-out, picture-in-picture) and suggest the window that shows them
 - [ ] Tests on synthetic frame sequences for all of the above
+- [ ] Capture a screen region when window capture doesn't work for some app
 
 ## 3. Lectures and review
 
