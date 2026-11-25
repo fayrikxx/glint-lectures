@@ -7,6 +7,41 @@ use serde::Serialize;
 
 use crate::capture::{CaptureFeed, CaptureState};
 
+#[cfg(all(windows, debug_assertions))]
+mod dump;
+// Recording frames is a dev tool. It needs the png crate, which the app only pulls in on
+// Windows.
+#[cfg(not(all(windows, debug_assertions)))]
+mod dump {
+    use std::time::Duration;
+
+    use glint_core::{BgraFrame, CropArea};
+
+    pub(super) struct Recorder;
+
+    impl Recorder {
+        pub(super) fn from_env() -> Self {
+            Self
+        }
+
+        pub(super) fn frame(
+            &mut self,
+            _frame: &BgraFrame,
+            _crop: Option<CropArea>,
+            _now: Duration,
+        ) {
+        }
+
+        pub(super) fn running(&mut self, _now: Duration, _running: bool) {}
+
+        pub(super) fn status(&self) -> Option<String> {
+            None
+        }
+    }
+}
+
+use dump::Recorder;
+
 /// The longest the thread waits for a frame. Capture state changes don't wake it, so this
 /// is how soon it notices that the window got minimized or covered.
 const STATE_CHECK: Duration = Duration::from_millis(500);
@@ -18,10 +53,10 @@ pub struct Shared {
     status: Mutex<Status>,
 }
 
-#[derive(Clone, Copy)]
 struct Status {
     state: AnalysisState,
     since: Instant,
+    recording: Option<String>,
 }
 
 /// The analysis state the way the UI gets it.
@@ -31,6 +66,8 @@ pub struct AnalysisReport {
     state: &'static str,
     /// How long the state has lasted so far.
     seconds: f64,
+    /// What the frame recorder of dev builds is doing, when it's switched on.
+    recording: Option<String>,
 }
 
 impl Default for Shared {
@@ -40,6 +77,7 @@ impl Default for Shared {
             status: Mutex::new(Status {
                 state: AnalysisState::Changing,
                 since: Instant::now(),
+                recording: None,
             }),
         }
     }
@@ -55,7 +93,7 @@ impl Shared {
     }
 
     pub fn report(&self) -> AnalysisReport {
-        let status = *lock(&self.status);
+        let status = lock(&self.status);
         AnalysisReport {
             state: match status.state {
                 AnalysisState::Still => "still",
@@ -63,6 +101,7 @@ impl Shared {
                 AnalysisState::Paused => "paused",
             },
             seconds: status.since.elapsed().as_secs_f64(),
+            recording: status.recording.clone(),
         }
     }
 }
@@ -95,6 +134,7 @@ fn run(feed: &CaptureFeed, shared: &Shared) {
     let started = Instant::now();
     let mut analysis = Analysis::new();
     let mut pause = PauseRule::default();
+    let mut recorder = Recorder::from_env();
     let mut running = true;
     let mut last_id = 0;
 
@@ -118,17 +158,21 @@ fn run(feed: &CaptureFeed, shared: &Shared) {
         let should_run = pause.should_run(&feed.state(), frame.is_some());
         if should_run != running {
             analysis.set_running(now, should_run);
+            recorder.running(now, should_run);
             running = should_run;
         }
         // The full frame is let go of right after it's shrunk, so capture can reuse it.
         if let Some(frame) = frame {
-            analysis.push(&frame, shared.crop().unwrap_or(CropArea::WHOLE), now);
+            let crop = shared.crop();
+            recorder.frame(&frame, crop, now);
+            analysis.push(&frame, crop.unwrap_or(CropArea::WHOLE), now);
         }
         analysis.tick(now);
 
         *lock(&shared.status) = Status {
             state: analysis.state(),
             since: started + analysis.since(),
+            recording: recorder.status(),
         };
     }
 }

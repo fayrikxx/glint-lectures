@@ -21,7 +21,7 @@ export type CropArea = { left: number; top: number; right: number; bottom: numbe
 type Point = { x: number; y: number };
 type Size = { width: number; height: number };
 
-type AnalysisReport = { state: string; seconds: number };
+type AnalysisReport = { state: string; seconds: number; recording: string | null };
 
 type CaptureStatus = {
   sessionId: number;
@@ -237,6 +237,7 @@ export default function CaptureView({ sessionId, target, initialCrop, onStop }: 
       {analysis && !finished && (
         <p className="capture-status">
           {analysis.state} {analysis.seconds.toFixed(1)} s
+          {analysis.recording && ` · ${analysis.recording}`}
         </p>
       )}
 
