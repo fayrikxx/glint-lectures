@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager, State};
 
+use crate::analysis::{self, AnalysisReport, AnalysisThread};
+
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
@@ -85,7 +87,7 @@ pub struct CaptureFeed {
 }
 
 impl CaptureFeed {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             frames: FrameSlot::new(),
             state: Mutex::new(CaptureState::Capturing),
@@ -108,9 +110,10 @@ pub fn next_frame_id() -> u64 {
 struct CaptureSession {
     id: u64,
     window_id: u64,
-    /// The part of the window slides are read from. `None` means the whole window.
-    crop: Option<CropArea>,
     feed: Arc<CaptureFeed>,
+    analysis: Arc<analysis::Shared>,
+    // Joined once Drop below has closed the frame slot, before the OS capture stops.
+    _analysis_thread: AnalysisThread,
     // Dropped last: stops the OS capture and waits for its thread.
     _capture: platform::Capture,
 }
@@ -119,11 +122,14 @@ impl CaptureSession {
     fn start(window_id: u64, pid: u32) -> Result<Self, String> {
         let feed = Arc::new(CaptureFeed::new());
         let capture = platform::start(window_id, pid, Arc::clone(&feed))?;
+        let analysis = Arc::new(analysis::Shared::default());
+        let analysis_thread = analysis::start(Arc::clone(&feed), Arc::clone(&analysis))?;
         Ok(Self {
             id: NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed),
             window_id,
-            crop: None,
             feed,
+            analysis,
+            _analysis_thread: analysis_thread,
             _capture: capture,
         })
     }
@@ -153,10 +159,10 @@ impl Captures {
         }
     }
 
-    fn feed_and_crop(&self) -> Option<(Arc<CaptureFeed>, Option<CropArea>)> {
+    fn feed_and_analysis(&self) -> Option<(Arc<CaptureFeed>, Arc<analysis::Shared>)> {
         lock(&self.0)
             .as_ref()
-            .map(|session| (Arc::clone(&session.feed), session.crop))
+            .map(|session| (Arc::clone(&session.feed), Arc::clone(&session.analysis)))
     }
 
     /// Stops the running capture. Tauri doesn't drop managed state when the app exits,
@@ -173,6 +179,7 @@ pub struct CaptureStatus {
     window_id: u64,
     state: CaptureState,
     crop: Option<CropBox>,
+    analysis: AnalysisReport,
 }
 
 /// A crop area the way the UI sends and gets it: edges as fractions of the window's size.
@@ -240,7 +247,8 @@ pub fn capture_status(captures: State<Captures>) -> Option<CaptureStatus> {
         session_id: session.id,
         window_id: session.window_id,
         state: session.feed.state(),
-        crop: session.crop.map(CropBox::from),
+        crop: session.analysis.crop().map(CropBox::from),
+        analysis: session.analysis.report(),
     })
 }
 
@@ -252,9 +260,9 @@ pub fn set_crop(
     captures: State<Captures>,
 ) -> Result<(), String> {
     let area = area.map(CropArea::try_from).transpose()?;
-    match lock(&captures.0).as_mut() {
+    match lock(&captures.0).as_ref() {
         Some(session) if session.id == session_id => {
-            session.crop = area;
+            session.analysis.set_crop(area);
             Ok(())
         }
         _ => Err("the capture has already stopped".to_string()),
@@ -289,10 +297,9 @@ pub async fn preview_frame(
     app: AppHandle,
     captures: State<'_, Captures>,
 ) -> Result<Response, String> {
-    let Some((feed, crop)) = captures.feed_and_crop() else {
+    let Some((feed, analysis)) = captures.feed_and_analysis() else {
         return Ok(Response::new(preview_reply(0, None)));
     };
-    let crop = crop.filter(|_| cropped);
     let window = app.get_webview_window("main");
     let reply = blocking(move || {
         // Nobody can see the preview while Glint is minimized. Capture keeps going.
@@ -302,7 +309,8 @@ pub async fn preview_frame(
         }
         let frame = match feed.frames.wait_newer(after, PREVIEW_WAIT) {
             SlotWait::Frame { id, frame } => {
-                let image = match crop {
+                // Read after the wait, so a crop set meanwhile already applies.
+                let image = match analysis.crop().filter(|_| cropped) {
                     Some(area) => frame
                         .crop(area)
                         .shrink_to_rgba(PREVIEW_MAX_SIZE, PREVIEW_MAX_SIZE),
