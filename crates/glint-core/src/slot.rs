@@ -135,6 +135,25 @@ mod tests {
     }
 
     #[test]
+    fn every_waiting_reader_gets_the_frame() {
+        // The preview and the analysis thread wait on the same slot.
+        let slot = Arc::new(FrameSlot::new());
+        let readers: Vec<_> = (0..2)
+            .map(|_| {
+                let slot = Arc::clone(&slot);
+                thread::spawn(move || slot.wait_newer(0, Duration::from_secs(10)))
+            })
+            .collect();
+        thread::sleep(Duration::from_millis(20));
+        slot.publish(1, frame(1));
+        for reader in readers {
+            let (id, frame) = expect_frame(reader.join().unwrap());
+            assert_eq!(id, 1);
+            assert_eq!(frame.pixels()[0], 1);
+        }
+    }
+
+    #[test]
     fn close_wakes_a_waiting_reader() {
         let slot = Arc::new(FrameSlot::new());
         let reader = {

@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::CropArea;
 
 /// A captured frame in the layout capture APIs hand out: BGRA, four bytes per pixel,
@@ -11,7 +13,7 @@ pub struct BgraFrame {
 
 /// An RGBA image, four bytes per pixel, rows packed with no padding. This is the layout
 /// a canvas `ImageData` expects.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RgbaImage {
     pub width: u32,
     pub height: u32,
@@ -75,44 +77,76 @@ impl BgraFrame {
     /// Alpha is set to opaque: window captures don't carry a meaningful one.
     pub fn shrink_to_rgba(&self, max_width: u32, max_height: u32) -> RgbaImage {
         let factor = shrink_factor(self.width, self.height, max_width, max_height);
-        let (width, height) = (self.width as usize, self.height as usize);
+        let mut image = RgbaImage::default();
+        self.shrink_part(
+            0..self.width as usize,
+            0..self.height as usize,
+            factor,
+            &mut image,
+        );
+        image
+    }
+
+    /// Cuts `area` out of the frame and shrinks it by averaging `factor` x `factor` blocks
+    /// of pixels, the same way as [`shrink_to_rgba`](Self::shrink_to_rgba).
+    ///
+    /// Writes into `out`, so the caller can keep one image and reuse its buffer for every
+    /// frame.
+    pub fn shrink_into(&self, area: CropArea, factor: u32, out: &mut RgbaImage) {
+        let (columns, rows) = area.pixels(self.width, self.height);
+        self.shrink_part(columns, rows, factor.max(1) as usize, out);
+    }
+
+    fn shrink_part(
+        &self,
+        columns: Range<usize>,
+        rows: Range<usize>,
+        factor: usize,
+        out: &mut RgbaImage,
+    ) {
+        let width = columns.len();
         let out_width = width.div_ceil(factor);
-        let out_height = height.div_ceil(factor);
+        let out_height = rows.len().div_ceil(factor);
+        let row_len = self.width as usize * 4;
 
-        let mut pixels = Vec::with_capacity(out_width * out_height * 4);
-        let mut sums = vec![[0u32; 3]; out_width];
+        out.width = out_width as u32;
+        out.height = out_height as u32;
+        out.pixels.clear();
+        out.pixels.reserve(out_width * out_height * 4);
 
-        for block_top in (0..height).step_by(factor) {
-            let block_bottom = (block_top + factor).min(height);
-            sums.fill([0; 3]);
-
+        // Each row of a band of blocks is first added byte by byte into column sums. That
+        // loop is a plain add over a slice, which the compiler turns into vector code, and
+        // it's where nearly all the time goes. Blocks are summed from the columns after.
+        let mut column_sums = vec![0u32; width * 4];
+        for block_top in rows.clone().step_by(factor) {
+            let block_bottom = (block_top + factor).min(rows.end);
+            column_sums.fill(0);
             for y in block_top..block_bottom {
-                let row = self.pixels[y * width * 4..(y + 1) * width * 4]
-                    .as_chunks::<4>()
-                    .0;
-                for (sum, block) in sums.iter_mut().zip(row.chunks(factor)) {
-                    for px in block {
-                        sum[0] += u32::from(px[0]);
-                        sum[1] += u32::from(px[1]);
-                        sum[2] += u32::from(px[2]);
-                    }
+                let start = y * row_len + columns.start * 4;
+                let row = &self.pixels[start..start + width * 4];
+                for (sum, &value) in column_sums.iter_mut().zip(row) {
+                    *sum += u32::from(value);
                 }
             }
 
-            let rows = block_bottom - block_top;
-            for (column, sum) in sums.iter().enumerate() {
-                // The last column and row of blocks can be narrower than `factor`.
-                let columns = factor.min(width - column * factor);
-                let count = (rows * columns) as u32;
+            let block_rows = block_bottom - block_top;
+            // The last column and row of blocks can be narrower than `factor`.
+            for block in column_sums.chunks(factor * 4) {
+                let count = (block_rows * block.len() / 4) as u32;
+                let mut sum = [0u32; 3];
+                for px in block.as_chunks::<4>().0 {
+                    sum[0] += px[0];
+                    sum[1] += px[1];
+                    sum[2] += px[2];
+                }
                 let average = |total: u32| ((total + count / 2) / count) as u8;
-                pixels.extend_from_slice(&[average(sum[2]), average(sum[1]), average(sum[0]), 255]);
+                out.pixels.extend_from_slice(&[
+                    average(sum[2]),
+                    average(sum[1]),
+                    average(sum[0]),
+                    255,
+                ]);
             }
-        }
-
-        RgbaImage {
-            width: out_width as u32,
-            height: out_height as u32,
-            pixels,
         }
     }
 }
@@ -246,5 +280,74 @@ mod tests {
             .shrink_to_rgba(960, 960);
         assert_eq!((image.width, image.height), (0, 0));
         assert!(image.pixels.is_empty());
+    }
+
+    /// Every pixel holds 10 times its x and y in blue and green, so averages show where
+    /// they came from. Big frames wrap around, which is fine where only sizes matter.
+    fn numbered(width: u32, height: u32) -> BgraFrame {
+        let pixels: Vec<[u8; 4]> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| [(x * 10) as u8, (y * 10) as u8, 0, 255]))
+            .collect();
+        bgra(width, height, &pixels)
+    }
+
+    #[test]
+    fn shrink_into_averages_blocks_of_the_area() {
+        // The right half of a 4x4 frame, shrunk by 2: one block of columns 2-3 and rows 0-1,
+        // and one of rows 2-3. Blue holds x * 10, so it averages to 25; green holds y * 10.
+        let mut image = RgbaImage::default();
+        numbered(4, 4).shrink_into(CropArea::new(0.5, 0.0, 1.0, 1.0).unwrap(), 2, &mut image);
+        assert_eq!((image.width, image.height), (1, 2));
+        assert_eq!(image.pixels, [0, 5, 25, 255, 0, 25, 25, 255]);
+    }
+
+    #[test]
+    fn shrink_into_handles_odd_sizes_at_the_frame_edge() {
+        // The bottom-right 3x3 of a 5x5 frame: blocks of 2x2, 1x2, 2x1 and 1x1 pixels.
+        let mut image = RgbaImage::default();
+        numbered(5, 5).shrink_into(CropArea::new(0.4, 0.4, 1.0, 1.0).unwrap(), 2, &mut image);
+        assert_eq!((image.width, image.height), (2, 2));
+        let blue: Vec<u8> = image.pixels.chunks(4).map(|px| px[2]).collect();
+        let green: Vec<u8> = image.pixels.chunks(4).map(|px| px[1]).collect();
+        assert_eq!(blue, [25, 40, 25, 40]);
+        assert_eq!(green, [25, 25, 40, 40]);
+    }
+
+    #[test]
+    fn shrink_into_matches_shrink_to_rgba_on_the_whole_frame() {
+        let frame = numbered(9, 7);
+        let mut image = RgbaImage::default();
+        frame.shrink_into(CropArea::WHOLE, 3, &mut image);
+        assert_eq!(image, frame.shrink_to_rgba(3, 3));
+    }
+
+    #[test]
+    fn shrink_into_reuses_the_image_for_a_new_size() {
+        let mut image = RgbaImage::default();
+        numbered(8, 8).shrink_into(CropArea::WHOLE, 2, &mut image);
+        assert_eq!((image.width, image.height), (4, 4));
+        numbered(4, 2).shrink_into(CropArea::WHOLE, 2, &mut image);
+        assert_eq!((image.width, image.height), (2, 1));
+        assert_eq!(image.pixels.len(), 2 * 4);
+    }
+
+    #[test]
+    fn shrink_into_copes_with_tiny_frames_and_areas() {
+        let mut image = RgbaImage::default();
+        bgra(1, 1, &[[1, 2, 3, 255]]).shrink_into(CropArea::WHOLE, 2, &mut image);
+        assert_eq!(image.pixels, [3, 2, 1, 255]);
+
+        let one_pixel = CropArea::new(0.5, 0.5, 0.5001, 0.5001).unwrap();
+        numbered(100, 100).shrink_into(one_pixel, 2, &mut image);
+        assert_eq!((image.width, image.height), (1, 1));
+
+        BgraFrame::new(0, 0, Vec::new())
+            .unwrap()
+            .shrink_into(CropArea::WHOLE, 2, &mut image);
+        assert!(image.pixels.is_empty());
+
+        // A factor of 0 is treated as 1 instead of dividing by zero.
+        numbered(2, 2).shrink_into(CropArea::WHOLE, 0, &mut image);
+        assert_eq!((image.width, image.height), (2, 2));
     }
 }

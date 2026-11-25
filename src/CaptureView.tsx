@@ -21,10 +21,13 @@ export type CropArea = { left: number; top: number; right: number; bottom: numbe
 type Point = { x: number; y: number };
 type Size = { width: number; height: number };
 
+type AnalysisReport = { state: string; seconds: number };
+
 type CaptureStatus = {
   sessionId: number;
   windowId: number;
   state: { kind: string; message?: string };
+  analysis: AnalysisReport;
 };
 
 type Props = {
@@ -47,6 +50,8 @@ export default function CaptureView({ sessionId, target, initialCrop, onStop }: 
   const [dragBox, setDragBox] = useState<CropArea | null>(null);
   const [cropError, setCropError] = useState<string | null>(null);
   const dragStart = useRef<Point | null>(null);
+  // Dev builds show what the analysis thinks of the picture, to check it by hand.
+  const [analysis, setAnalysis] = useState<AnalysisReport | null>(null);
 
   const finished = state === NO_CAPTURE || state === WINDOW_CLOSED || state === FAILED;
   const cropping = editing && !finished;
@@ -106,6 +111,26 @@ export default function CaptureView({ sessionId, target, initialCrop, onStop }: 
       stopped = true;
     };
   }, [sessionId, showCropped]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    let stopped = false;
+    const timer = window.setInterval(() => {
+      invoke<CaptureStatus | null>("capture_status")
+        .then((status) => {
+          if (!stopped) {
+            setAnalysis(status?.sessionId === sessionId ? status.analysis : null);
+          }
+        })
+        .catch(() => {});
+    }, 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [sessionId]);
 
   function startEditing() {
     setDraft(crop);
@@ -208,6 +233,12 @@ export default function CaptureView({ sessionId, target, initialCrop, onStop }: 
         </div>
         {!frameSize && !finished && <p className="picker-note">Waiting for the first frame...</p>}
       </div>
+
+      {analysis && !finished && (
+        <p className="capture-status">
+          {analysis.state} {analysis.seconds.toFixed(1)} s
+        </p>
+      )}
 
       <div className="capture-foot">
         <p className="capture-status" role="status">

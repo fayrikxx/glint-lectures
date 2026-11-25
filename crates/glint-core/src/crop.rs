@@ -11,6 +11,13 @@ pub struct CropArea {
 }
 
 impl CropArea {
+    pub const WHOLE: Self = Self {
+        left: 0.0,
+        top: 0.0,
+        right: 1.0,
+        bottom: 1.0,
+    };
+
     /// Returns `None` unless `0 <= left < right <= 1` and `0 <= top < bottom <= 1`.
     pub fn new(left: f64, top: f64, right: f64, bottom: f64) -> Option<Self> {
         let inside = |edge: f64| (0.0..=1.0).contains(&edge);
